@@ -21,6 +21,8 @@ import org.apache.spark.ml.util.DefaultReadWriteTest
 import org.apache.spark.mllib.util.MLlibTestSparkContext
 import org.apache.spark.mllib.util.TestingUtils._
 import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
 
 class ImputerSuite extends SparkFunSuite with MLlibTestSparkContext with DefaultReadWriteTest {
 
@@ -155,6 +157,27 @@ class ImputerSuite extends SparkFunSuite with MLlibTestSparkContext with Default
     assert(newInstance.surrogateDF.collect() === instance.surrogateDF.collect())
   }
 
+  test("Imputer for Numeric with default missing Value NaN") {
+    val df = spark.createDataFrame( Seq(
+      (0, 1.0, 1.0, 1.0),
+      (1, 11.0, 11.0, 11.0),
+      (2, 1.5, 1.5, 1.5),
+      (3, Double.NaN, 4.5, 1.5)
+    )).toDF("id", "value1", "expected_mean_value1", "expected_median_value1")
+    val imputer = new Imputer()
+      .setInputCols(Array("value1"))
+      .setOutputCols(Array("out1"))
+
+    val types = Seq(ShortType, IntegerType, LongType, FloatType, DoubleType,
+      ByteType, DecimalType(10, 0))
+    for (mType <- types) {
+      val df2 = df.withColumn("value1", col("value1").cast(mType))
+        .withColumn("value1", when(col("value1").equalTo(0), null).otherwise(col("value1")))
+        .withColumn("expected_mean_value1", col("expected_mean_value1").cast(mType))
+        .withColumn("expected_median_value1", col("expected_median_value1").cast(mType))
+      ImputerSuite.iterateStrategyTest(imputer, df2)
+    }
+  }
 }
 
 object ImputerSuite {
@@ -177,6 +200,9 @@ object ImputerSuite {
               s"Imputed values differ. Expected: $exp, actual: $out")
           case Row(exp: Double, out: Double) =>
             assert((exp.isNaN && out.isNaN) || (exp ~== out absTol 1e-5),
+              s"Imputed values differ. Expected: $exp, actual: $out")
+          case Row(exp, out) =>
+            assert(exp == out,
               s"Imputed values differ. Expected: $exp, actual: $out")
         }
       }
