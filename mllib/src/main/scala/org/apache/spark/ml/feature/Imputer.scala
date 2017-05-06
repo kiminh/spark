@@ -84,7 +84,7 @@ private[feature] trait ImputerParams extends Params with HasInputCols {
     val outputFields = $(inputCols).zip($(outputCols)).map { case (inputCol, outputCol) =>
       val inputField = schema(inputCol)
       SchemaUtils.checkNumericType(schema, inputCol)
-      StructField(outputCol, inputField.dataType, inputField.nullable)
+      StructField(outputCol, DoubleType, inputField.nullable)
     }
     StructType(schema ++ outputFields)
   }
@@ -94,12 +94,13 @@ private[feature] trait ImputerParams extends Params with HasInputCols {
  * :: Experimental ::
  * Imputation estimator for completing missing values, either using the mean or the median
  * of the columns in which the missing values are located. The input columns should be of
- * DoubleType or FloatType. Currently Imputer does not support categorical features
+ * numeric type. Currently Imputer does not support categorical features
  * (SPARK-15041) and possibly creates incorrect values for a categorical feature.
  *
  * Note that the mean/median value is computed after filtering out missing values.
  * All Null values in the input columns are treated as missing, and so are also imputed. For
  * computing median, DataFrameStatFunctions.approxQuantile is used with a relative error of 0.001.
+ * The output column is always of Double type regardless of the input column type.
  */
 @Experimental
 class Imputer @Since("2.2.0")(override val uid: String)
@@ -201,12 +202,11 @@ class ImputerModel private[ml](
     $(inputCols).zip($(outputCols)).zip(surrogates).foreach {
       case ((inputCol, outputCol), surrogate) =>
         val inputType = dataset.schema(inputCol).dataType
-        val ic = col(inputCol)
+        val ic = col(inputCol).cast(DoubleType)
         outputDF = outputDF.withColumn(outputCol,
           when(ic.isNull, surrogate)
           .when(ic === $(missingValue), surrogate)
-          .otherwise(ic)
-          .cast(inputType))
+          .otherwise(ic))
     }
     outputDF.toDF()
   }
