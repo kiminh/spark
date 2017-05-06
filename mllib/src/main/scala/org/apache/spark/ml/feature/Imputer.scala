@@ -201,7 +201,6 @@ class ImputerModel private[ml](
 
     $(inputCols).zip($(outputCols)).zip(surrogates).foreach {
       case ((inputCol, outputCol), surrogate) =>
-        val inputType = dataset.schema(inputCol).dataType
         val ic = col(inputCol).cast(DoubleType)
         outputDF = outputDF.withColumn(outputCol,
           when(ic.isNull, surrogate)
